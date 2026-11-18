@@ -89,6 +89,12 @@ app.post("/add-product", upload.single("productImage"), async (req, res) => {
   }
 });
 
+// get products data
+app.get("/products",async(req,res)=>{
+  const data = await productCollection.find().toArray()
+  res.send(data)
+})
+
 // Local Development Server
 if (!process.env.VERCEL) {
   app.listen(port, () => {
