@@ -1,7 +1,5 @@
 
-import dotenv from "dotenv";
-
-dotenv.config();
+import "dotenv/config";
 
 import express from "express";
 import { MongoClient } from "mongodb";
@@ -12,37 +10,48 @@ import uploadToCloudinary from "./utils/cloudinaryUpload.js";
 const app = express();
 const port = process.env.PORT || 5000;
 
+// CORS
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: [
+      "http://localhost:3000",
+      process.env.CLIENT_SITE_URL,
+    ].filter(Boolean),
   }),
 );
 
 app.use(express.json());
 
+// MongoDB Client
 const client = new MongoClient(process.env.MONGODB_URI);
 
-// Connect to MongoDB
-export async function connectToMongoDB() {
-  try {
-    await client.connect();
-    console.log("You successfully connected to MongoDB!");
-    return client;
-  } catch (error) {
-    console.error("MongoDB connection error:", error);
-    throw error;
+const db = client.db("black-coffee-store");
+const productCollection = db.collection("products_in_store");
+
+// MongoDB Connection
+let connectionPromise;
+
+async function connectToMongoDB() {
+  if (!connectionPromise) {
+    connectionPromise = client.connect().catch((error) => {
+      connectionPromise = null;
+      throw error;
+    });
   }
+
+  return connectionPromise;
 }
 
-// Database
-const db = client.db("black-coffee-store");
-
-// Collection
-const productCollection = db.collection("products_in_store");
+// Health Check
+app.get("/", (req, res) => {
+  res.status(200).send("Black Coffee API is running!");
+});
 
 // Add Product
 app.post("/add-product", upload.single("productImage"), async (req, res) => {
   try {
+    await connectToMongoDB();
+
     const data = req.body;
 
     if (!req.file) {
@@ -80,18 +89,12 @@ app.post("/add-product", upload.single("productImage"), async (req, res) => {
   }
 });
 
-// Start Server
-async function startServer() {
-  try {
-    await connectToMongoDB();
-
-    app.listen(port, () => {
-      console.log(`Example app listening on port ${port}`);
-    });
-  } catch (error) {
-    console.error("Server startup failed:", error);
-    process.exit(1);
-  }
+// Local Development Server
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+  });
 }
 
-startServer();
+// Vercel Serverless Export
+export default app;
